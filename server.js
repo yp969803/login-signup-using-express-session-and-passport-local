@@ -2,18 +2,20 @@ const express=require('express')
 const app=express()
 const bcrypt=require('bcrypt')
 const mongoose=require('mongoose')
-const usermodel=require('./user.js')
+const usermodel=require('./models/user.js')
 const passport=require('passport')
 const flash=require('express-flash')
 const session=require('express-session')
 const methodoverride=require('method-override')
-const { find, findOne } = require('./user.js')
+const question=require('./models/question')
+app.use(methodoverride('_method'))   
+app.set('view-engine','ejs')
 const mongodbstore=require('connect-mongodb-session')(session)
 main().catch(err => console.log(err));
 async function main() {
-  await mongoose.connect('mongodb://127.0.0.1/login').then((res)=>console.log('mongod connected'));
+  await mongoose.connect('mongodb://127.0.0.1/qIITR').then((res)=>console.log('mongod connected'));
   const store=new mongodbstore({
-    uri: 'mongodb://127.0.0.1/login',
+    uri: 'mongodb://127.0.0.1/qIITR',
   collection: 'mySessions'
   })
   app.use(flash())
@@ -27,23 +29,19 @@ app.use(session({
     }
 
 }))
-
-const initializepassport=require('./passport-config.js')
-
-
-initializepassport(
-    passport,
-    async(username)=>await usermodel.findOne({username:username}),
-    async(id)=>await usermodel.findById(id)
-    )
-    app.use(passport.initialize())
-    app.use(passport.session())
-
+app.use(express.urlencoded({extended:false}))
+app.use(passport.initialize())
+app.use(passport.session())
+app.use('/auth',require('./routes/auth'))
+app.use('/question',require('./routes/question'))  
+app.use('/answer',require('./routes/answer'))
+app.use('/profile',require('./routes/profile'))
+ 
     const checkauthenticated=(req,res,next)=>{
         if(req.isAuthenticated()){
             return next()
         }
-        res.redirect('/login')
+        res.redirect('/auth/login')
     }
  const checknotauthenticated=(req,res,next)=>{
         if(req.isAuthenticated()){
@@ -51,68 +49,18 @@ initializepassport(
         }
         next()
     } 
-app.use(methodoverride('_method'))   
-app.set('view-engine','ejs')
-app.use(express.urlencoded({extended:false}))
-app.get('/',checkauthenticated,(req,res)=>{
-  
+
+app.get('/',checkauthenticated,async(req,res)=>{
+     try{
+        const questions= await question.find().sort({createdAt:'desc'})
     
-    res.render('index.ejs',{name:req.user.username})
-})
-app.get('/login',checknotauthenticated,(req,res)=>{
-   req.session.isAuth=true
-    res.render('login.ejs')
-
-})
-app.post('/login',checknotauthenticated,passport.authenticate('local',{
-  successRedirect: '/',
-  failureRedirect:'/login',
-  failureFlash:true
-
-
-}))
-
-app.get('/register',checknotauthenticated,(req,res)=>{
-    res.render('register.ejs',{name:'Hello World!'})
+       res.render('index.ejs',{name:req.user.username,questions:questions})
+     }catch(e){
+        console.log(e)
+        res.status(404).send("Internal server error")
+     }
 })
 
-app.post('/register',checknotauthenticated,async (req,res)=>{
-    try{
-        const {username,password}=req.body
-        
-        let user=await usermodel.findOne({username: username});
-        console.log(user)
-        if(user){
-            console.log(user)
-             res.render('register.ejs',{name:`${username} this username already exists`})
-        }
-        
-       else{
-        user=new usermodel({
-            
-            username:username,
-            password:password,
-            
-        })
-        
-        await user.save()
-        res.redirect('/login')
-       }
-    }
-    catch(err){
-        console.log(err)
-     res.redirect('/register')
-    }
-    console.log(req.body)
-    
-})
-
-app.post('/logout', function(req, res, next) {
-    req.logout(function(err) {
-      if (err) { return next(err); }
-      res.redirect('/');
-    });
-  });
 app.listen(80,()=>{
     console.log('app is started in port 80')
 })

@@ -7,7 +7,7 @@ const mongoose=require('mongoose')
        const user=await getuserbyname(username)             
        if(user==null){
 
-        return done(null,false,{message:'No user with this username'})
+        return done(null,false,{message:'No user with this userId'})
        }
        try{
         
